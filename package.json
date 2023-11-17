@@ -16,7 +16,7 @@
     "format": "prettier --write 'src/**/*.{css,html,ts,tsx}'",
     "lint": "eslint 'src/**/*.{css,html,ts,tsx}'",
     "start": "bun run src/index.ts",
-    "dev": "bun --hot src/index.ts"
+    "dev": "bun --watch src/index.ts"
   },
   "dependencies": {
     "react": "^18.2.0"

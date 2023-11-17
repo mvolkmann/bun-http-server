@@ -2,7 +2,15 @@ import {Database} from 'bun:sqlite';
 import {randomUUID} from 'node:crypto';
 
 const db = new Database('todos.db', {create: true});
-const query = db.query('select * from todos;');
+const addStmt = db.prepare(
+  'insert into todos (id, text, completed) values (?, ?, ?)'
+);
+const changesQuery = db.prepare('select changes()');
+const deleteStmt = db.prepare('delete from todos where id = ?');
+const getAllQuery = db.query('select * from todos');
+const updateStmt = db.prepare(
+  'update todos set text = ?, completed = ? where id = ?'
+);
 
 type Todo = {
   id: string;
@@ -11,7 +19,7 @@ type Todo = {
 };
 
 // TODO: Change this to demonstrate the builtin SQLite support.
-const todos: {[id: string]: Todo} = {};
+// const todos: {[id: string]: Todo} = {};
 
 type Route = (req: Request) => Response | Promise<Response>;
 
@@ -31,19 +39,20 @@ const notFound = new Response('Not Found', {status: 404});
 async function addTodo(req: Request): Promise<Response> {
   const {text} = await req.json();
   const id = randomUUID();
+  addStmt.run(id, text, false);
   const todo = {id, text, completed: false};
-  todos[id] = todo;
-  return new Response(JSON.stringify(todo));
+  return Response.json(todo);
+}
+
+function changes() {
+  const result = changesQuery.get() as {[key: string]: number};
+  return result['changes()'];
 }
 
 async function deleteTodo(req: Request): Promise<Response> {
   const id = getLastPathParam(req);
-  if (todos[id]) {
-    delete todos[id];
-    return new Response('');
-  }
-
-  return notFound;
+  deleteStmt.run(id);
+  return changes() ? new Response('') : notFound;
 }
 
 function getDemo(): Response {
@@ -72,10 +81,11 @@ function getRoute(req: Request): Route | undefined {
 }
 
 function getTodos(): Response {
-  const todos = query.get();
-  const res = new Response(JSON.stringify(Object.values(todos)));
-  res.headers.set('Content-Type', 'application/json');
-  return res;
+  const todos = getAllQuery.all(); // get method only returns first
+  // const res = new Response(JSON.stringify(todos));
+  // res.headers.set('Content-Type', 'application/json');
+  // return res;
+  return Response.json(todos);
 }
 
 function getLastPathParam(req: Request): string {
@@ -86,14 +96,10 @@ function getLastPathParam(req: Request): string {
 
 async function updateTodo(req: Request): Promise<Response> {
   const id = getLastPathParam(req);
-  if (todos[id]) {
-    const todo = await req.json();
-    todo.id = id;
-    todos[id] = todo;
-    return new Response(JSON.stringify(todo));
-  }
-
-  return notFound;
+  const todo = await req.json();
+  todo.id = id;
+  const result = updateStmt.run(todo.text, todo.completed, id);
+  return changes() ? Response.json(todo) : notFound;
 }
 
 const server = Bun.serve({
