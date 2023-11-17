@@ -1,9 +1,11 @@
 import {Database} from 'bun:sqlite';
-import {randomUUID} from 'node:crypto';
 
+// This database contains a "todos" table that was created with:
+// create table todos(id integer primary key autoincrement, text string, completed numeric);
 const db = new Database('todos.db', {create: true});
-const addStmt = db.prepare(
-  'insert into todos (id, text, completed) values (?, ?, ?)'
+
+const addQuery = db.query(
+  'insert into todos (text, completed) values (?, ?) returning *'
 );
 const changesQuery = db.prepare('select changes()');
 const deleteStmt = db.prepare('delete from todos where id = ?');
@@ -12,14 +14,13 @@ const updateStmt = db.prepare(
   'update todos set text = ?, completed = ? where id = ?'
 );
 
+/*
 type Todo = {
   id: string;
   text: string;
   completed: boolean;
-};
-
-// TODO: Change this to demonstrate the builtin SQLite support.
-// const todos: {[id: string]: Todo} = {};
+}
+*/
 
 type Route = (req: Request) => Response | Promise<Response>;
 
@@ -38,9 +39,7 @@ const notFound = new Response('Not Found', {status: 404});
 
 async function addTodo(req: Request): Promise<Response> {
   const {text} = await req.json();
-  const id = randomUUID();
-  addStmt.run(id, text, false);
-  const todo = {id, text, completed: false};
+  const todo = addQuery.get(text, false);
   return Response.json(todo);
 }
 
@@ -81,10 +80,7 @@ function getRoute(req: Request): Route | undefined {
 }
 
 function getTodos(): Response {
-  const todos = getAllQuery.all(); // get method only returns first
-  // const res = new Response(JSON.stringify(todos));
-  // res.headers.set('Content-Type', 'application/json');
-  // return res;
+  const todos = getAllQuery.all(); // "get" method only returns first
   return Response.json(todos);
 }
 
